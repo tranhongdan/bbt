@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bảng Biến Thiên Online</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- KaTeX CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+
+    <!-- Custom CSS -->
+    <style>
+        .katex-display { margin: 0; }
+        .arrow-container { position: relative; width: 100%; height: 100%; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+
+    <!-- Load Libs -->
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/nerdamer.core.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Algebra.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Calculus.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Solve.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans p-4 md:p-8 min-h-screen flex flex-col">
+
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden w-full mb-6">
+        
+        <!-- Header -->
+        <div class="bg-indigo-600 p-6 text-white flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold flex items-center gap-2">
+                    <i data-lucide="line-chart" class="w-8 h-8"></i>
+                    Bảng Biến Thiên Online
+                </h1>
+                <p class="text-indigo-200 mt-1">Hỗ trợ tốt hàm đa thức, phân thức (HTML Version)</p>
+            </div>
+            <div id="loading-indicator" class="text-sm animate-pulse hidden">Đang tải Math Engine...</div>
+        </div>
+
+        <!-- Input Section -->
+        <div class="p-6 border-b border-gray-100 bg-white">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Nhập hàm số y = f(x)</label>
+            <div class="flex gap-2">
+                <div class="relative flex-1 group">
+                    <input 
+                        type="text" 
+                        id="func-input"
+                        value="(x^2+2x+2)/(x+1)"
+                        placeholder="Ví dụ: x3 - 3x (tự hiểu là x^3 - 3x)..."
+                        class="w-full pl-4 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-mono text-lg"
+                    />
+                    <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <button id="btn-clear" title="Xóa" class="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <button 
+                    id="btn-calc"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                    <i data-lucide="calculator" class="w-5 h-5"></i>
+                    Khảo sát
+                </button>
+            </div>
+            
+            <div id="error-msg" class="mt-3 p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100 flex items-center gap-2 hidden">
+                <i data-lucide="info" class="w-4 h-4"></i>
+                <span id="error-text"></span>
+            </div>
+        </div>
+
+        <!-- Result Section -->
+        <div id="result-container" class="p-6 overflow-x-auto hidden">
+            <div class="min-w-[600px]">
+                <div class="border border-gray-400 rounded shadow-sm select-none bg-white">
+                    <div id="row-x" class="grid border-b border-gray-400"></div>
+                    <div id="row-y-prime" class="grid border-b border-gray-400"></div>
+                    <div id="row-y" class="grid h-48 border-gray-400"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="empty-state" class="p-12 text-center text-gray-400">
+            Nhập hàm số và nhấn Khảo sát để xem kết quả
+        </div>
+
+        <!-- Footer / Copyright Info -->
+        <div class="bg-gray-50 border-t border-gray-100 p-4 text-center text-xs text-gray-500">
+            <p>&copy; 2025 Bảng Biến Thiên Online. All rights reserved.</p>
+            <p class="mt-1">By tranhongdan@gmail.com </p>
+        </div>
+
+    </div>
+
+    <!-- MAIN LOGIC -->
+    <script>
+        // === GLOBAL VARS ===
+        let expression = '';
+
+        // === DOM ELEMENTS ===
+        const els = {
+            input: document.getElementById('func-input'),
+            btnCalc: document.getElementById('btn-calc'),
+            btnClear: document.getElementById('btn-clear'),
+            resultContainer: document.getElementById('result-container'),
+            emptyState: document.getElementById('empty-state'),
+            errorMsg: document.getElementById('error-msg'),
+            errorText: document.getElementById('error-text'),
+            loadingIndicator: document.getElementById('loading-indicator'),
+            
+            rowX: document.getElementById('row-x'),
+            rowYPrime: document.getElementById('row-y-prime'),
+            rowY: document.getElementById('row-y')
+        };
+
+        // === INIT ===
+        window.onload = () => {
+            lucide.createIcons();
+            if(window.nerdamer && window.katex) {
+                setTimeout(() => handleAnalyze(els.input.value), 500);
+            } else {
+                els.loadingIndicator.classList.remove('hidden');
+                const checkLoad = setInterval(() => {
+                    if(window.nerdamer && window.katex) {
+                        clearInterval(checkLoad);
+                        els.loadingIndicator.classList.add('hidden');
+                        handleAnalyze(els.input.value);
+                    }
+                }, 500);
+            }
+        };
+
+        // === EVENTS ===
+        els.btnCalc.addEventListener('click', () => handleAnalyze(els.input.value));
+        els.btnClear.addEventListener('click', () => { els.input.value = ''; els.input.focus(); });
+        els.input.addEventListener('keydown', (e) => { if(e.key === 'Enter') handleAnalyze(els.input.value); });
+
+        // === LOGIC ===
+        function showError(msg) {
+            els.errorText.textContent = msg;
+            els.errorMsg.classList.remove('hidden');
+        }
+        function hideError() {
+            els.errorMsg.classList.add('hidden');
+        }
+
+        // === HELPER: Balance Parentheses ===
+        function balanceParentheses(expr) {
+            let openCount = 0;
+            for (let char of expr) {
+                if (char === '(') openCount++;
+                if (char === ')') openCount--;
+            }
+            if (openCount > 0) {
+                expr += ')'.repeat(openCount);
+            } else if (openCount < 0) {
+                expr = '('.repeat(-openCount) + expr;
+            }
+            return expr;
+        }
+
+        // === ANALYSIS LOGIC ===
+        function handleAnalyze(inputStr) {
+            hideError();
+            if(!window.nerdamer) return;
+
+            try {
+                // 1. NHAN DIEN THONG MINH (Smart Input)
+                // Thay the ky tu+so thanh ky tu^so (vd: x3 -> x^3)
+                // Regex: (Dau dong hoac khong phai chu cai) + (Chu cai) + (So)
+                // Dieu nay giup tranh cac ham nhu sin2 (n khong phai bat dau tu)
+                let smartExpr = inputStr.replace(/(^|[^a-zA-Z])([a-zA-Z])(\d+)/g, '$1$2^$3');
+
+                // 2. Chuan hoa co ban
+                let expr = smartExpr.replace(/\s+/g, '');
+                if (!expr) return;
+                
+                // 3. Can bang ngoac
+                expr = balanceParentheses(expr);
+                
+                // 4. CAP NHAT LAI INPUT CHO NGUOI DUNG THAY (Moi them)
+                els.input.value = expr;
+
+                expression = expr; 
+
+                // TCD (Tim nghiem mau)
+                let verticalAsymptotes = [];
+                if (expr.includes('/')) {
+                    try {
+                        const denomMatch = expr.match(/\/(\(?[\w\d\+\-\*\^\.]+\)?)/);
+                        if (denomMatch && denomMatch[1]) {
+                            let denom = denomMatch[1];
+                            if (denom.startsWith('(') && denom.endsWith(')')) denom = denom.slice(1, -1);
+                            const denomSols = nerdamer.solve(denom, 'x');
+                            const denomArr = denomSols.toString().replace(/^\[|\]$/g, '').split(',');
+                            denomArr.forEach(sol => {
+                                if (!sol || sol.includes('i')) return;
+                                try {
+                                    const val = parseFloat(nerdamer(sol).evaluate().text());
+                                    if (!isNaN(val)) verticalAsymptotes.push({ val, latex: nerdamer(sol).toTeX() });
+                                } catch (e) {}
+                            });
+                        }
+                    } catch(e) {}
+                }
+
+                // Tinh dao ham
+                const diffResult = nerdamer(`diff(${expr}, x)`);
+                const diffStr = diffResult.text();
+
+                // Giai y'=0
+                let criticalPoints = [];
+                try {
+                    const solutions = nerdamer.solve(diffStr, 'x');
+                    const solutionArray = solutions.toString().replace(/^\[|\]$/g, '').split(',');
+                    solutionArray.forEach(sol => {
+                        if (!sol || sol.includes('i')) return;
+                        try {
+                            const val = parseFloat(nerdamer(sol).evaluate().text());
+                            if (!isNaN(val) && Math.abs(val) !== Infinity) {
+                                const checkVal = parseFloat(nerdamer(diffStr).evaluate({x: val}).text());
+                                if (Math.abs(checkVal) < 0.01) criticalPoints.push({ val, latex: nerdamer(sol).toTeX(), raw: sol });
+                            }
+                        } catch (e) {}
+                    });
+                } catch(err) {}
+
+                criticalPoints = criticalPoints.filter(cp => !verticalAsymptotes.some(va => Math.abs(va.val - cp.val) < 0.001));
+
+                let allPoints = [ ...criticalPoints.map(p => ({ ...p, type: 'critical' })), ...verticalAsymptotes.map(p => ({ ...p, type: 'asymptote' })) ];
+                allPoints.sort((a, b) => a.val - b.val);
+
+                let uniquePoints = [];
+                if (allPoints.length > 0) {
+                    uniquePoints.push(allPoints[0]);
+                    for (let i = 1; i < allPoints.length; i++) {
+                        if (Math.abs(allPoints[i].val - allPoints[i-1].val) > 0.0001) uniquePoints.push(allPoints[i]);
+                    }
+                }
+
+                let xRow = [ { val: -Infinity, latex: '-\\infty' }, ...uniquePoints, { val: Infinity, latex: '+\\infty' } ];
+                let analysisData = [];
+
+                // Xay dung du lieu
+                for (let i = 0; i < xRow.length - 1; i++) {
+                    let startNode = xRow[i];
+                    let endNode = xRow[i+1];
+                    
+                    if (i > 0) {
+                        let isAsymptote = startNode.type === 'asymptote';
+                        let yObj = calcYWrapper(startNode, expression);
+                        analysisData.push({ type: 'node', x: startNode, y: yObj, yPrime: isAsymptote ? '||' : (startNode.type === 'critical' ? '0' : ''), isAsymptote });
+                    } else {
+                        analysisData.push({ type: 'node', x: startNode, y: calcYWrapper(startNode, expression), yPrime: '', isAsymptote: false });
+                    }
+
+                    let testPoint;
+                    if (startNode.val === -Infinity && endNode.val === Infinity) testPoint = 0;
+                    else if (startNode.val === -Infinity) testPoint = endNode.val - 1;
+                    else if (endNode.val === Infinity) testPoint = startNode.val + 1;
+                    else testPoint = (startNode.val + endNode.val) / 2;
+                    
+                    if (verticalAsymptotes.some(va => Math.abs(va.val - testPoint) < 0.001)) testPoint += 0.1; 
+
+                    let signVal = 0;
+                    try {
+                        const val = parseFloat(nerdamer(diffStr).evaluate({x: testPoint}).text());
+                        if (Math.abs(val) >= 0.0000001) signVal = val > 0 ? 1 : -1;
+                    } catch(e){}
+
+                    analysisData.push({ type: 'interval', sign: signVal > 0 ? '+' : '-', start: startNode.val, end: endNode.val });
+                }
+
+                let lastNode = xRow[xRow.length - 1];
+                analysisData.push({ type: 'node', x: lastNode, y: calcYWrapper(lastNode, expression), yPrime: '', isAsymptote: false });
+
+                analysisData = analysisData.map(item => {
+                    if (item.type === 'node' && item.isAsymptote) {
+                        const leftLim = calculateSmartLimit(item.x.val, 'left', expression);
+                        const rightLim = calculateSmartLimit(item.x.val, 'right', expression);
+                        return { ...item, yLeft: leftLim, yRight: rightLim };
+                    }
+                    return item;
+                });
+
+                renderTable(analysisData);
+            } catch (err) {
+                console.error(err);
+                if (err.name === 'ParityError') {
+                    showError("Lỗi cú pháp: Biểu thức thiếu dấu ngoặc. Vui lòng kiểm tra lại.");
+                } else {
+                    showError("Lỗi phân tích: " + err.message);
+                }
+            }
+        }
+
+        // Helper Tinh Gioi Han Thong Minh
+        function calculateSmartLimit(targetVal, direction, expr) {
+            let xTest;
+            const LARGE_NUM = 1000000;
+            if (targetVal === Infinity) xTest = LARGE_NUM;
+            else if (targetVal === -Infinity) xTest = -LARGE_NUM;
+            else {
+                const epsilon = 0.000001; 
+                xTest = direction === 'left' ? targetVal - epsilon : targetVal + epsilon;
+            }
+            try {
+                const evalResult = nerdamer(expr).evaluate({x: xTest});
+                const val = parseFloat(evalResult.text());
+                const INF_THRESHOLD = 10000;
+                if (val > INF_THRESHOLD) return { val: Infinity, latex: '+\\infty' };
+                if (val < -INF_THRESHOLD) return { val: -Infinity, latex: '-\\infty' };
+                if (Math.abs(val - Math.round(val)) < 0.01) {
+                    const intVal = Math.round(val);
+                    return { val: intVal, latex: intVal.toString() };
+                }
+                if (Math.abs((val * 2) - Math.round(val * 2)) < 0.01) {
+                    const fracVal = Math.round(val * 2) / 2;
+                    return { val: fracVal, latex: nerdamer(fracVal).toTeX() };
+                }
+                const rounded = Math.round(val * 100) / 100;
+                return { val: rounded, latex: nerdamer(rounded).toTeX() };
+            } catch(e) {
+                return { val: targetVal === -Infinity ? -Infinity : Infinity, latex: targetVal === -Infinity ? '-\\infty' : '+\\infty' };
+            }
+        }
+
+        function calcYWrapper(xObj, expr) {
+            if (xObj.val === Infinity || xObj.val === -Infinity) return calculateSmartLimit(xObj.val, null, expr);
+            if (xObj.type === 'asymptote') return null;
+            try {
+                let subExpr = xObj.raw || xObj.val.toString();
+                let symbolVal = nerdamer(expr).sub('x', `(${subExpr})`);
+                let val = parseFloat(symbolVal.evaluate().text());
+                if (isNaN(val)) throw new Error("NaN");
+                return { val: val, latex: symbolVal.toTeX() };
+            } catch (e) {
+                try {
+                    const val = parseFloat(nerdamer(expr).evaluate({x: xObj.val}).text());
+                    if (!isNaN(val)) {
+                        let latex = val.toFixed(2);
+                        if (Math.abs(val - Math.round(val)) < 0.001) latex = Math.round(val).toString();
+                        else try { latex = nerdamer(val).toTeX(); } catch(e3){}
+                        return { val, latex };
+                    }
+                } catch(e2){}
+                return { val: 0, latex: '?' };
+            }
+        }
+
+        // === RENDERING FUNCTIONS ===
+
+        function renderLatex(container, tex, colorClass = '') {
+            if(!tex) return;
+            try {
+                katex.render(tex, container, { throwOnError: false });
+                if(colorClass) container.querySelector('.katex').classList.add(colorClass);
+            } catch(e) {
+                container.textContent = tex;
+            }
+        }
+
+        function renderTable(data) {
+            els.resultContainer.classList.remove('hidden');
+            els.emptyState.classList.add('hidden');
+            const colStyle = `grid-template-columns: 60px repeat(${data.length}, 1fr)`;
+            els.rowX.style.cssText = colStyle;
+            els.rowYPrime.style.cssText = colStyle;
+            els.rowY.style.cssText = `grid-template-columns: 60px 1fr`; 
+            els.rowX.innerHTML = ''; els.rowYPrime.innerHTML = ''; els.rowY.innerHTML = '';
+
+            const xHeader = document.createElement('div');
+            xHeader.className = "p-3 border-r border-gray-400 flex items-center justify-center text-xl";
+            renderLatex(xHeader, "x");
+            els.rowX.appendChild(xHeader);
+            data.forEach(item => {
+                const cell = document.createElement('div');
+                cell.className = "p-2 flex items-center justify-center text-lg text-gray-800";
+                if(item.type === 'node') renderLatex(cell, item.x ? item.x.latex : '');
+                els.rowX.appendChild(cell);
+            });
+
+            const ypHeader = document.createElement('div');
+            ypHeader.className = "p-3 border-r border-gray-400 flex items-center justify-center text-xl";
+            renderLatex(ypHeader, "y'");
+            els.rowYPrime.appendChild(ypHeader);
+            data.forEach(item => {
+                const cell = document.createElement('div');
+                cell.className = "p-2 flex items-center justify-center text-lg";
+                if(item.type === 'node') {
+                    if(item.isAsymptote) renderLatex(cell, "||");
+                    else if(item.yPrime === '0') renderLatex(cell, "0");
+                } else {
+                    const color = item.sign === '+' ? 'text-blue-600' : 'text-red-600';
+                    const span = document.createElement('span');
+                    span.className = color;
+                    renderLatex(span, item.sign);
+                    cell.appendChild(span);
+                }
+                els.rowYPrime.appendChild(cell);
+            });
+
+            const yHeader = document.createElement('div');
+            yHeader.className = "border-r border-gray-400 flex items-center justify-center text-xl";
+            renderLatex(yHeader, "y");
+            els.rowY.appendChild(yHeader);
+            const arrowWrapper = document.createElement('div');
+            arrowWrapper.className = "relative w-full h-full p-2";
+            els.rowY.appendChild(arrowWrapper);
+            renderArrows(data, arrowWrapper);
+        }
+
+        function renderArrows(data, container) {
+            const width = 1000; const height = 200;
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+            svg.setAttribute("preserveAspectRatio", "none");
+            svg.setAttribute("class", "absolute inset-0 w-full h-full overflow-visible");
+            
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+            marker.setAttribute("id", "arrowhead");
+            marker.setAttribute("markerWidth", "6"); marker.setAttribute("markerHeight", "6");
+            marker.setAttribute("refX", "5"); marker.setAttribute("refY", "3");
+            marker.setAttribute("orient", "auto");
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", "M0,0 L6,3 L0,6 L1,3 Z");
+            path.setAttribute("fill", "#4B5563");
+            marker.appendChild(path);
+            defs.appendChild(marker);
+            svg.appendChild(defs);
+            container.appendChild(svg);
+
+            let points = [];
+            const getValue = (val) => {
+                if (val === Infinity) return 1000;
+                if (val === -Infinity) return -1000;
+                if (val === null || val === undefined) return 0; 
+                return val;
+            };
+
+            data.forEach((item, idx) => {
+                if(item.type === 'interval') return;
+                if(item.isAsymptote) {
+                    if(item.yLeft) points.push({ val: getValue(item.yLeft.val) });
+                    if(item.yRight) points.push({ val: getValue(item.yRight.val) });
+                } else {
+                    if(item.y) points.push({ val: getValue(item.y.val) });
+                }
+            });
+
+            const uniqueVals = [...new Set(points.filter(p => Math.abs(p.val) !== 1000).map(p => p.val))].sort((a,b) => a - b);
+            const getY = (valRaw) => {
+                if (valRaw === Infinity) return 30; 
+                if (valRaw === -Infinity) return 170; 
+                if (uniqueVals.length === 0) return 100;
+                if (uniqueVals.length === 1) return 100;
+                const rank = uniqueVals.indexOf(valRaw);
+                const step = 80 / (uniqueVals.length - 1); 
+                return 140 - (rank * step);
+            };
+
+            const cellWidth = width / data.length;
+            const getCoords = (idx, side, yVal) => {
+                const xCenter = (idx * cellWidth) + (cellWidth / 2);
+                const y = getY(yVal);
+                let x = xCenter;
+                if (side === 'left') x = xCenter - (cellWidth * 0.35);
+                if (side === 'right') x = xCenter + (cellWidth * 0.35);
+                return { x, y };
+            };
+
+            let textNodes = [];
+            data.forEach((item, idx) => {
+                if(item.type === 'node' && item.isAsymptote) {
+                    const xCenter = (idx * cellWidth) + (cellWidth / 2);
+                    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    const l1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    l1.setAttribute("x1", xCenter - 3); l1.setAttribute("y1", 0); l1.setAttribute("x2", xCenter - 3); l1.setAttribute("y2", height);
+                    l1.setAttribute("stroke", "#9CA3AF"); l1.setAttribute("stroke-width", "1");
+                    const l2 = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    l2.setAttribute("x1", xCenter + 3); l2.setAttribute("y1", 0); l2.setAttribute("x2", xCenter + 3); l2.setAttribute("y2", height);
+                    l2.setAttribute("stroke", "#9CA3AF"); l2.setAttribute("stroke-width", "1");
+                    g.appendChild(l1); g.appendChild(l2);
+                    svg.appendChild(g);
+                    if(item.yLeft && item.yRight) {
+                        textNodes.push({ ...getCoords(idx, 'left', item.yLeft.val), key: `${idx}_L`, latex: item.yLeft.latex });
+                        textNodes.push({ ...getCoords(idx, 'right', item.yRight.val), key: `${idx}_R`, latex: item.yRight.latex });
+                    }
+                } else if(item.type === 'node') {
+                    if(item.y) {
+                        textNodes.push({ ...getCoords(idx, 'center', item.y.val), key: `${idx}`, latex: item.y.latex });
+                    }
+                }
+            });
+
+            const nodeMap = textNodes.reduce((acc, node) => ({...acc, [node.key]: node}), {});
+            for(let i = 0; i < data.length - 2; i += 2) {
+                const startIdx = i;
+                const endIdx = i + 2;
+                const startItem = data[startIdx];
+                const endItem = data[endIdx];
+                let startKey = startIdx.toString();
+                if (startItem.isAsymptote) startKey += '_R'; 
+                let endKey = endIdx.toString();
+                if (endItem.isAsymptote) endKey += '_L'; 
+                const startPt = nodeMap[startKey];
+                const endPt = nodeMap[endKey];
+                if (startPt && endPt) {
+                    const dx = endPt.x - startPt.x; const dy = endPt.y - startPt.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy); const pad = 35; 
+                    if (dist > pad * 2) {
+                        const ratio = pad / dist;
+                        const x1 = startPt.x + dx * ratio; const y1 = startPt.y + dy * ratio;
+                        const x2 = endPt.x - dx * ratio; const y2 = endPt.y - dy * ratio;
+                        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                        line.setAttribute("x1", x1); line.setAttribute("y1", y1); line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+                        line.setAttribute("stroke", "#4B5563"); line.setAttribute("stroke-width", "1.5"); line.setAttribute("marker-end", "url(#arrowhead)");
+                        svg.appendChild(line);
+                    }
+                }
+            }
+
+            textNodes.forEach(node => {
+                const div = document.createElement('div');
+                div.className = "absolute flex items-center justify-center pointer-events-none";
+                div.style.left = `${(node.x / width) * 100}%`;
+                div.style.top = `${(node.y / height) * 100}%`;
+                div.style.transform = 'translate(-50%, -50%)';
+                div.style.whiteSpace = 'nowrap';
+                const span = document.createElement('span');
+                span.className = "text-lg";
+                renderLatex(span, node.latex);
+                div.appendChild(span);
+                container.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
